@@ -23,6 +23,5 @@ jobs:
 
       - name: Build with Ant
         run: |
-          ant -version
-          echo $?
+          if ant -version 2> /dev/null ; then echo works ; else echo breaks ; fi
           ant -version && echo works || echo breaks
