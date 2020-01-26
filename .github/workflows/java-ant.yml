@@ -22,4 +22,7 @@ jobs:
           javac -version
 
       - name: Build with Ant
-        run: ant -version
+        run: |
+          ant -version
+          echo $?
+          ant -version && echo works || echo breaks
