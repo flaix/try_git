@@ -1,0 +1,25 @@
+name: Continous build - build and test on every push
+
+on: push
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java-version: [7, 8, 11]
+    
+    steps:
+      - name: Setup Java ${{ matrix.java-version }}
+        uses: actions/setup-java@v1
+        with:
+          java-version: ${{ matrix.java-version }}
+
+      - name: Report Java version
+        run: |
+          java -version
+          javac -version
+
+      - name: Build with Ant
+        run: ant -version
