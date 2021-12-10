@@ -1,6 +1,10 @@
 name: Continous build - build and test on every push
 
-on: push
+on:
+  push:
+    branches-ignore:
+      - 'release*'
+      - gh-pages
 
 jobs:
   build:
