@@ -49,8 +49,25 @@ jobs:
 
       - name: Check what this looks like
         run: |
+          set -x
           git branch -vv
           ls -l .git/refs/heads
+          ls -l .git/refs/remotes/origin
+          git ls-remote --heads origin
           git fetch --no-tags --prune --depth=2 origin +refs/heads/*:refs/remotes/origin/*
           git branch -vv
-          ls -l .git/refs/heads
+          ls -l .git/refs/remotes/origin
+
+      - name: Create or checkout release branch
+        run: |
+          set -x
+          if [[ -n "$(git ls-remote --heads origin release)" ]] ; then
+            echo "Remote has already branch 'release'"
+          fi
+          if [[ -n "$(git branch -l -r origin/release)" ]] ; then
+            echo "We have a remote branch 'release'"
+          fi
+          
+
+
+
