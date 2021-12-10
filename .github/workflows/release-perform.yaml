@@ -1,0 +1,33 @@
+name: Perform release
+
+on:
+  pull_request:
+    types:
+      - opened
+      - closed
+      - ready_for_review
+    branches:
+      - 'release-builder'
+      - release
+      - master
+  issue_comment:
+
+jobs:
+  info:
+    name: Get event info
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get event environment
+        run: |
+          echo "GITHUB_SHA: $GITHUB_SHA"
+          echo "GITHUB_RFE: $GITHUB_REF"
+          echo "GITHUB_HEAD_REF: $GITHUB_HEAD_REF"
+          echo "GITHUB_BASE_REF: $GITHUB_BASE_REF"
+          echo "GITHUB_EVENT_NAME: $GITHUB_EVENT_NAME"
+
+      - name: Dump event payload
+        env:
+          GITHUB_CONTEXT_EVENT: ${{ toJSON(github.event) }}
+        run: echo "$GITHUB_CONTEXT_EVENT"
+
