@@ -47,16 +47,10 @@ jobs:
       - name: Checkout my repo
         uses: actions/checkout@v2
 
-      - name: Check what this looks like
+      - name: Fetch all remote branches
         run: |
           set -x
-          git branch -vv
-          ls -l .git/refs/heads
-          ls -l .git/refs/remotes/origin
-          git ls-remote --heads origin
           git fetch --no-tags --prune --depth=2 origin +refs/heads/*:refs/remotes/origin/*
-          git branch -vv
-          ls -l .git/refs/remotes/origin
 
       - name: Create or checkout release branch
         run: |
@@ -66,8 +60,25 @@ jobs:
           fi
           if [[ -n "$(git branch -l -r origin/release)" ]] ; then
             echo "We have a remote branch 'release'"
+            git fetch origin +release
+            git checkout release
+          else
+            git branch release $(git merge-base --fork-point master)
           fi
-          
 
+      - name: Put something on the release branch
+        run: |
+          echo "This is a release item now" > release.item.txt
+          git rev-parse HEAD >> release.item.txt
+          git add release.item.txt
+          git commit -m "Create a release item to release"
+          git push origin release
 
+      - name: Create merge request as trigger
+        run: |
+          if gh pr view > /dev/null ; then
+            echo "PR already exists."
+          else
+            gh pr create --title "Release version xy" --body "This is to release version xy" --base master --draft
+          fi
 
