@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="try_git" default="info" xmlns:mx="antlib:org.moxie">
+
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		Retrieve Moxie Toolkit
+		
+		documentation @ http://gitblit.github.io/moxie
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	-->
+	<property name="moxie.version" value="0.9.4" />
+	<property name="moxie.url" value="http://gitblit.github.io/moxie/maven" />
+	<property name="moxie.jar" value="moxie-toolkit-${moxie.version}.jar" />
+	<property name="moxie.dir" value="${user.home}/.moxie" />
+	
+	<!-- Download Moxie from it's Maven repository to user.home -->
+	<mkdir dir="${moxie.dir}" />
+	<get src="${moxie.url}/com/gitblit/moxie/moxie-toolkit/${moxie.version}/${moxie.jar}"
+		dest="${moxie.dir}" skipexisting="true" verbose="true" />
+	
+	<!-- Register Moxie tasks -->
+	<taskdef uri="antlib:org.moxie">
+		<classpath location="${moxie.dir}/${moxie.jar}" />
+	</taskdef>
+	
+	<!-- Project directories -->
+	<property name="project.src.dir" value="${basedir}/src/main/java" />
+
+	<!-- Tools -->
+	<property name="octokit" location="${basedir}/.github/ok.sh" />
+
+	<!-- GitHub user/organization name -->
+	<property name="gh.org" value="flaix" />
+
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		Initialize Moxie and setup build properties
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	-->
+	<target name="prepare">
+	
+		<!-- Setup Ant build from build.moxie and resolve dependencies.
+		     If it exists, build.properties is automatically loaded.
+		     Explicitly set mxroot allowing CI servers to override the default. -->
+		<mx:init verbose="no" mxroot="${moxie.dir}" />
+				
+		<!-- Set Ant project properties -->
+		<property name="release.tag" value="v${project.version}" />
+		<property name="currentRelease.tag" value="v${project.releaseVersion}" />
+		<property name="release.name" value="trygit-${project.version}"/>
+		<property name="releaselog" value="${basedir}/releases.moxie" />
+
+
+		<!-- Report Java version -->
+		<echo>JDK version: ${ant.java.version}</echo>
+		<exec executable="javac">
+			<arg value="-version" />
+		</exec>
+		<echo>Java/JVM version: ${java.version}</echo>
+	</target>
+
+	
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+		Determine relaase version.
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+	-->
+	<target name="tagRelease" depends="prepare" description="tag a new version and prepare for the next development cycle">
+		<!-- release -->
+		<property name="dryrun" value="true" />
+		<mx:version stage="release" dryrun="${dryrun}" />
+		<property name="project.tag" value="v${project.version}" />
+		<echo>I think the next release version is ${project.version}, tagged as ${project.tag}</echo>
+		<!-- output version information for other scripts/programs to pick up -->
+		<mx:if>
+			<and>
+				<isset property="versionInfo" />
+				<not><equals arg1="${versionInfo}" arg2="" trim="true"/></not>
+			</and>
+			<then>
+				<echo file="${basedir}/${versionInfo}">
+GB_RELEASE_VERSION=${project.version}
+GB_RELEASE_TAG=${project.tag}
+</echo>
+			</then>
+		</mx:if>
+	</target>
+</project>

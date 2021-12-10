@@ -1,0 +1,18 @@
+#
+# Some project descriptor
+#
+
+# Specify minimum Moxie version required to build
+requires: 0.9.4
+
+# Project Metadata
+name: Try Git
+description: Trying out Git and Github stuff
+groupId: com.gitblit
+artifactId: try_git
+version: 1.9.1-SNAPSHOT
+inceptionYear: 2011
+
+# Current stable release
+releaseVersion: 1.9.0
+releaseDate: 2020-02-01
