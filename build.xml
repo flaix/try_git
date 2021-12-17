@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project name="try_git" default="info" xmlns:mx="antlib:org.moxie">
+<project name="trygit" default="compile" xmlns:mx="antlib:org.moxie">
 
 	<!--
 		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -12,7 +12,9 @@
 	<property name="moxie.url" value="http://gitblit.github.io/moxie/maven" />
 	<property name="moxie.jar" value="moxie-toolkit-${moxie.version}.jar" />
 	<property name="moxie.dir" value="${user.home}/.moxie" />
-	
+
+	<property name="jacoco.version" value="0.8.4" />
+
 	<!-- Download Moxie from it's Maven repository to user.home -->
 	<mkdir dir="${moxie.dir}" />
 	<get src="${moxie.url}/com/gitblit/moxie/moxie-toolkit/${moxie.version}/${moxie.jar}"
@@ -25,12 +27,16 @@
 	
 	<!-- Project directories -->
 	<property name="project.src.dir" value="${basedir}/src/main/java" />
+	<property name="project.resources.dir" value="${basedir}/src/main/resources" />
 
 	<!-- Tools -->
 	<property name="octokit" location="${basedir}/.github/ok.sh" />
+	<property name="relnoawk" location="${basedir}/src/site/templates/releasenotes.awk" />
 
 	<!-- GitHub user/organization name -->
 	<property name="gh.org" value="flaix" />
+	<!-- GitHub project name -->
+	<property name="gh.repo" value="try_git" />
 
 	<!--
 		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -43,11 +49,14 @@
 		     If it exists, build.properties is automatically loaded.
 		     Explicitly set mxroot allowing CI servers to override the default. -->
 		<mx:init verbose="no" mxroot="${moxie.dir}" />
-				
+
+
 		<!-- Set Ant project properties -->
 		<property name="release.tag" value="v${project.version}" />
 		<property name="currentRelease.tag" value="v${project.releaseVersion}" />
 		<property name="release.name" value="trygit-${project.version}"/>
+		<property name="distribution.zipfile" value="${release.name}.zip" />
+		<property name="distribution.tgzfile" value="${release.name}.tar.gz" />
 		<property name="releaselog" value="${basedir}/releases.moxie" />
 
 
@@ -61,16 +70,190 @@
 
 	
 	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		Cleanup all build artifacts and directories
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	-->
+	<target name="clean" depends="prepare" description="Cleanup all build artifacts and directories">
+		
+		<!-- Clean build and target directories -->
+		<mx:clean />
+
+	</target>
+
+	
+
+
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		Compile
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	-->
+	<target name="compile" depends="prepare" description="compiles program from source">
+
+		<!-- Compile project -->
+		<mx:javac scope="compile" clean="true" />
+		
+	</target>
+
+		
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		Report the compile dependencies on the console
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	-->
+	<target name="report" depends="prepare" description="generate dependency report">
+		
+		<!-- Report compile dependencies to the console -->
+		<mx:report scope="compile" destfile="${project.targetDirectory}/dependencies.txt" />
+		
+	</target>
+
+	
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		Test
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	-->
+	<target name="test" depends="compile" description="compiles program from source and runs unit tests">
+
+
+		<!-- Compile unit tests -->
+		<mx:javac scope="test" />
+		
+		<!-- Run unit tests -->
+		<mx:test failonerror="true" />
+
+	</target>
+
+
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		Run Program
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	-->
+	<target name="run" depends="compile" description="Run program">
+
+		<!-- run the mainclass in a separate JVM -->
+		<mx:run fork="true"/>
+		
+	</target>			
+			
+	
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		Build Distribution
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	-->
+	<target name="buildGO" depends="compile" description="Build distribution">
+		
+		<echo>Building ${project.version}</echo>
+
+		<local name="go.dir"/>
+		<property name="go.dir" value="${project.outputDirectory}/go"/>
+		<delete dir="${go.dir}" />
+		
+		<local name="go.release.dir" />
+		<property name="go.release.dir" value="${go.dir}/${release.name}" />	
+
+		<!-- Build jar -->
+		<mx:jar destfile="${go.release.dir}/trygit.jar" includeresources="true">
+			<mainclass name="net.flaix.TryGit" />
+		</mx:jar>
+
+		<!-- Create GO Windows Zip deployment -->
+		<mx:zip basedir="${go.dir}">
+			<!-- LICENSE and NOTICE -->
+			<zipfileset dir="${basedir}" prefix="${release.name}">
+				<include name="README.md" />
+			</zipfileset>
+			<!-- include all dependencies -->
+			<dependencies prefix="${release.name}/ext" />
+		</mx:zip>
+
+		<!-- Create GO Linux/OSX tar.gz deployment -->
+		<mx:tar basedir="${go.dir}" longfile="gnu" compression="gzip">
+			<!-- LICENSE and NOTICE -->
+			<zipfileset dir="${basedir}" prefix="${release.name}">
+				<include name="README.md" />
+			</zipfileset>
+			<!-- include all dependencies -->
+			<dependencies prefix="${release.name}/ext" />
+		</mx:tar>		
+
+	</target>
+	
+
+
+	<!--
 		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-		Determine relaase version.
+		Build all binaries and site
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	-->
+	<target name="buildAll" depends="buildGO" />		
+
+	
+
+
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		Publish binaries to GitHub release
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	-->
+	<target name="releaseBinaries" depends="prepare" description="Publish the program binaries to a GitHub release">
+
+		<ghReleaseDraft
+			releaselog="${releaselog}"
+		    releasetag="${release.tag}"/>
+
+		<echo>Uploading TryGit ${project.version} binaries</echo>
+
+		<!-- Upload GO Windows ZIP file -->
+		<githubUpload
+			source="${project.targetDirectory}/${distribution.zipfile}"
+			target="trygit-${project.version}.zip" />
+
+		<!-- Upload GO Linux/Unix tar.gz file -->
+		<githubUpload
+			source="${project.targetDirectory}/${distribution.tgzfile}"
+			target="trygit-${project.version}.tar.gz" />
+
+	</target>
+
+
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		Publish GH release draft
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	-->
+	<target name="publishRelease" depends="prepare" description="Publish the GitHub release draft" >
+
+		<echo>Publishing TryGit ${project.version} release draft on GitHub for tag ${release.tag}</echo>
+
+		<ghGetReleaseId
+			releaseVersion="${project.version}"/>
+		<exec executable="bash" logError="true" >
+			<arg value="-c" />
+			<arg value="${octokit} -q edit_release ${gh.org} ${gh.repo} ${ghrelease.id} tag_name='${release.tag}'"></arg>
+		</exec>
+		<ghPublishReleaseDraft
+			releaseid="${ghrelease.id}"/>
+
+	</target>
+
+
+
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+		Determine the release version and tag name.
 		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
 	-->
-	<target name="tagRelease" depends="prepare" description="tag a new version and prepare for the next development cycle">
+	<target name="determineReleaseVersion" depends="prepare" description="determine the release version and tag name">
 		<!-- release -->
 		<property name="dryrun" value="true" />
 		<mx:version stage="release" dryrun="${dryrun}" />
 		<property name="project.tag" value="v${project.version}" />
-		<echo>I think the next release version is ${project.version}, tagged as ${project.tag}</echo>
+
 		<!-- output version information for other scripts/programs to pick up -->
 		<mx:if>
 			<and>
@@ -79,10 +262,238 @@
 			</and>
 			<then>
 				<echo file="${basedir}/${versionInfo}">
-GB_RELEASE_VERSION=${project.version}
-GB_RELEASE_TAG=${project.tag}
+GBLT_RELEASE_VERSION=${project.version}
+GBLT_RELEASE_TAG=${project.tag}
 </echo>
 			</then>
 		</mx:if>
 	</target>
+
+
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+		Tag a new version and prepare for the next development cycle.
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+	-->
+	<target name="tagRelease" depends="prepare" description="tag a new version and prepare for the next development cycle">
+		<!-- release -->
+		<property name="dryrun" value="false" />
+		<mx:version stage="release" dryrun="${dryrun}" />
+		<property name="project.tag" value="v${project.version}" />
+		<!-- commit build.moxie & releases.moxie (automatic) -->
+		<mx:commit showtitle="no">
+			<message>Prepare ${project.version} release</message>
+			<tag name="${project.tag}">
+				<message>${project.name} ${project.version} release</message>
+			</tag>
+		</mx:commit>
+
+		<!-- output version information for other scripts/programs to pick up -->
+		<mx:if>
+			<and>
+				<isset property="versionInfo" />
+				<not><equals arg1="${versionInfo}" arg2="" trim="true"/></not>
+			</and>
+			<then>
+				<echo file="${basedir}/${versionInfo}">
+GBLT_RELEASE_VERSION=${project.version}
+GBLT_RELEASE_TAG=${project.tag}
+</echo>
+			</then>
+		</mx:if>
+
+		<!-- create the release process script -->
+		<createReleaseScript
+				projectVersion="${project.version}"
+				projectTag="${project.tag}"
+				projectCommitId="${project.commitId}" />
+	</target>
+
+
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		Tag a new version and prepare for the next development cycle.
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	-->
+	<target name="releaseScript" depends="prepare" description="create the release process script for a release version">
+		<!-- create the release process script -->
+		<createReleaseScript
+				projectVersion="${project.version}"
+				projectTag="${release.tag}"
+				projectCommitId="${release.tag}" />
+	</target>
+
+
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+		Prepare for the next point release development cycle.
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+	-->
+	<target name="nextPointReleaseCycle" depends="prepare" description="prepare for the next point release development cycle">
+		<!-- next cycle -->
+		<mx:version stage="snapshot" incrementNumber="incremental" dryrun="${dryrun}" />
+		<mx:commit showtitle="no">
+		    <message>Reset build identifiers for next point release cycle</message>
+		</mx:commit>		
+	</target>
+
+		
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+		Prepare for the next minor release development cycle.
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+	-->
+	<target name="nextMinorReleaseCycle" depends="prepare" description="prepare for the next minor release development cycle">
+		<!-- next cycle -->
+		<mx:version stage="snapshot" incrementNumber="minor" dryrun="${dryrun}" />
+		<mx:commit showtitle="no">
+		    <message>Reset build identifiers for next minor release cycle</message>
+		</mx:commit>		
+	</target>
+
+
+
+
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		Create the release process script from the template.
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	-->
+	<macrodef name="createReleaseScript">
+		<attribute name="projectVersion" />
+		<attribute name="projectTag" />
+		<attribute name="projectCommitId" />
+		<sequential>
+			<mx:if>
+				<os family="windows" />
+				<then>
+					<!-- Windows PowerShell script        -->
+					<!-- set-executionpolicy remotesigned -->
+					<property name="recipe" value="release_@{projectVersion}.ps1" />
+				</then>
+				<else>
+					<!-- Bash script -->
+					<property name="recipe" value="release_@{projectVersion}.sh" />
+				</else>
+			</mx:if>
+			<delete file="${recipe}" failonerror="false" quiet="true" verbose="false" />
+			<!-- Work-around for lack of proper ant property substitution in copy -->
+			<property name="dollar" value="$"/>
+			<copy file="release.template" tofile="${recipe}">
+				<filterset begintoken="${dollar}{" endtoken="}">
+					<filter token="project.version" value="@{projectVersion}" />
+					<filter token="project.commitId" value="@{projectCommitId}" />
+					<filter token="project.tag" value="@{projectTag}" />
+					<filter token="project.directory" value="${basedir}" />
+					<filter token="maven.directory" value="${maven.directory}" />
+				</filterset>
+			</copy>
+			<chmod file="${recipe}" perm="ugo+rx" />
+		</sequential>
+	</macrodef>
+
+
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		Macro to create release draft on GitHub
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	-->
+	<macrodef name="ghReleaseDraft">
+		<attribute name="releaselog" />
+		<attribute name="releasetag" />
+		<sequential>
+			<mx:if>
+				<isset property="updateRelease" />
+				<then>
+					<echo>updating release ${release.tag} draft on GitHub</echo>
+					<exec executable="bash" logError="true" failonerror="true" outputproperty="ghrelease.id">
+						<arg value="-c" />
+						<arg value="${octokit} list_releases ${gh.org} ${gh.repo} _filter='.[] | &quot;\(.name)\t\(.id)&quot;' | grep ${project.version} | cut -f2"></arg>
+					</exec>
+				</then>
+				<else>
+					<echo>creating release ${release.tag} draft on GitHub</echo>
+					<exec executable="bash" logError="true" failonerror="true" outputproperty="ghrelease.id">
+						<arg value="-c" />
+						<arg value="${octokit} create_release ${gh.org} ${gh.repo} @{releasetag} name=${project.version} draft=true | cut -f2"></arg>
+					</exec>
+				</else>
+			</mx:if>
+
+			<exec executable="bash" logError="true" failonerror="true" outputproperty="ghrelease.upldUrl">
+				<arg value="-c" />
+				<arg value="${octokit} release ${gh.org} ${gh.repo} ${ghrelease.id} _filter=.upload_url | sed 's/{.*$/?name=/'"></arg>
+			</exec>
+			<exec executable="bash" logError="true" failonerror="true" outputproperty="ghrelease.notes">
+				<arg value="-c" />
+				<arg value="cat @{releaselog} | awk -f ${relnoawk} protect=true"></arg>
+			</exec>
+			<exec executable="bash" logError="true" >
+				<arg value="-c" />
+				<arg value="${octokit} -q edit_release ${gh.org} ${gh.repo} ${ghrelease.id} body='${ghrelease.notes}'"></arg>
+			</exec>
+		</sequential>
+	</macrodef>
+
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		Macro to upload binaries to GitHub
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	-->
+	<macrodef name="githubUpload">
+		<attribute name="source"/>
+		<attribute name="target"/>
+		<sequential>
+			<mx:if>
+				<isset property="updateRelease" />
+				<then>
+					<echo>removing @{target} on GitHub from release ${ghrelease.id}</echo>
+					<exec executable="bash" logError="true" failonerror="true">
+						<arg value="-c" />
+						<arg value="${octokit} release_assets ${gh.org} ${gh.repo} ${ghrelease.id} | grep @{target} | cut -f1 | xargs -L1 ${octokit} -y delete_asset ${gh.org} ${gh.repo}"></arg>
+					</exec>
+				</then>
+				<else>
+				</else>
+			</mx:if>
+			<echo>uploading @{source} to GitHub release ${ghrelease.id}</echo>
+			<exec executable="bash" logError="true" failonerror="true" >
+				<arg value="-c" />
+				<arg value="${octokit} upload_asset ${ghrelease.upldUrl}@{target} @{source}"></arg>
+			</exec>
+		</sequential>
+	</macrodef>
+
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		Macro to publish release draft on GitHub
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	-->
+	<macrodef name="ghPublishReleaseDraft">
+		<attribute name="releaseid"/>
+		<sequential>
+			<echo>publishing GitHub release draft @{releaseid}</echo>
+			<exec executable="bash" logError="true" >
+				<arg value="-c" />
+				<arg value="${octokit} -q edit_release ${gh.org} ${gh.repo} @{releaseid} draft=false"></arg>
+			</exec>
+		</sequential>
+	</macrodef>
+
+	<!--
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		Macro to get id of release draft on GitHub
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	-->
+	<macrodef name="ghGetReleaseId">
+		<attribute name="releaseVersion"/>
+		<sequential>
+			<exec executable="bash" logError="true" failonerror="true" outputproperty="ghrelease.id">
+				<arg value="-c" />
+				<arg value="${octokit} list_releases ${gh.org} ${gh.repo} _filter='.[] | &quot;\(.name)\t\(.tag_name)\t\(.id)&quot;' | grep @{releaseVersion} | cut -f3"></arg>
+			</exec>
+		</sequential>
+	</macrodef>
+
+
 </project>

@@ -8,11 +8,53 @@ requires: 0.9.4
 # Project Metadata
 name: Try Git
 description: Trying out Git and Github stuff
-groupId: com.gitblit
-artifactId: try_git
-version: 1.9.1-SNAPSHOT
+groupId: net.flaix
+artifactId: trygit
+version: 0.1.0-SNAPSHOT
 inceptionYear: 2011
 
 # Current stable release
-releaseVersion: 1.9.0
+releaseVersion: 0.0.1
 releaseDate: 2020-02-01
+
+# Mainclass is used for setting jar manifests and using the mx:run target
+mainclass: net.flaix.TryGit
+
+# Moxie supports multiple source directories and allows you to assign
+# a scope to each directory.
+sourceDirectories:
+- compile 'src/main/java'
+- test 'src/test/java'
+
+# Copy all retrieved dependencies to the "ext" directory.
+# Generated IDE settings (.classpath, etc) will use the artifacts
+# from this project-relative directory. This allows the IDE settings
+# to be version-controlled and shared.
+dependencyDirectory: ext
+
+# Register the Eclipse JGit Maven repositories
+registeredRepositories:
+- { id: central, url: 'https://repo1.maven.org/maven2' }
+- { id: mavencentral, url: 'https://repo1.maven.org/maven2' }
+
+
+# Convenience properties for dependencies
+properties: {
+  slf4j.version  : 1.7.29
+  }
+
+
+# Dependencies
+#
+#   May be tagged with ":label" notation to group dependencies.
+#
+#   "@extension" fetches the artifact with the specified extension
+#   and ignores all transitive dependencies.
+#
+#   "!groupId" or "!groupId:artifactId" excludes all matching transitive
+#   dependencies in that dependency's dependency graph.
+#
+
+dependencies:
+
+- test 'junit:junit:4.12'

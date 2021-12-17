@@ -1,0 +1,53 @@
+#
+# ${project.version} release
+#
+r3: {
+    title: ${project.name} ${project.version} released
+    id: ${project.version}
+    date: ${project.buildDate}
+    note: ''
+          This has some code now.
+          ''
+    html: ~
+    text: ''
+          It is only a welcome notice.
+          ''
+    security: ~
+    fixes: ~
+    changes: ~
+    additions:
+      - Add code to print a hello.
+    dependencyChanges: ~
+    contributors: ~
+}
+
+
+#
+# 0.0.2
+#
+r2: {
+    title: TryGit 0.0.2 Released
+    id: 0.0.1
+    date: 2011-06-26
+    text: interims release
+
+    contributors:
+  - Florian Zschocke
+}
+
+#
+# 0.0.1
+#
+r1: {
+    title: TryGit 0.0.1 Released
+    id: 0.0.1
+    date: 2011-06-26
+    text: initial release
+
+    contributors:
+  - Florian Zschocke
+}
+
+snapshot: &r3
+release: &r1
+releases: &r[1..2]
