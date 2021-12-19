@@ -60,13 +60,13 @@ jobs:
           revbody="${{ github.event.review.body }}"
           if [ -n "$revbody" ] ; then
             if echo "$revbody" | grep version >/dev/null ; then
-              incver=$(echo "$revbody" | sed -e 's/.* increase \(minor|patch\) version.*/\1/')
+              incver=$(echo "$revbody" | sed -e 's/.* [Ii]ncrease \(minor|patch\) version.*/\1/')
             fi
           fi
           if [ -z "$incver" ] ; then
             echo "Found no version instructions in review body."
             if echo "$comment" | grep version >/dev/null ; then
-              incver=$(echo "$comment" | sed -e 's/.* increase \(minor|patch\) version.*/\1/')
+              incver=$(echo "$comment" | sed -e 's/.* [Ii]ncrease \(minor|patch\) version.*/\1/')
             fi
           fi
           if [ -n "$incver" ] ; then
