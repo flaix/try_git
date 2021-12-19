@@ -37,7 +37,9 @@ jobs:
       - name: Dump event payload
         env:
           GITHUB_CONTEXT_EVENT: ${{ toJSON(github.event) }}
-        run: echo "$GITHUB_CONTEXT_EVENT"
+        run: |
+          echo "Action event name: ${{ github.event_name }}"
+          echo "$GITHUB_CONTEXT_EVENT"
 
       - name: Checkout my repo
         uses: actions/checkout@v2
@@ -48,6 +50,11 @@ jobs:
         if: ${{ pull_request_review == github.event_name }}
         run: |
           echo "PR review for ${{ github.event.pull_request.title }}"
+          if [ "$github.event.review.state" != approved ] ; then
+            echo "PR review did not approve. ($github.event.review.state)"
+            echo "Finishing here."
+            exit 0
+          fi
           echo "Parsing for instructions on increasing version."
           comment=$(gh pr view -c -c --json comments --jq '.comments[] | "\(.createdAt)\t\(.body)"' | sort | cut -f2 | grep "version" | tail -n1)
           revbody="${{ github.event.review.body }}"
