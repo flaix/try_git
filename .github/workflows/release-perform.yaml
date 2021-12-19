@@ -3,7 +3,6 @@ name: Perform release
 on:
   pull_request:
     types:
-      - opened
       - edited
       - closed
       - ready_for_review
@@ -11,6 +10,14 @@ on:
       - 'release-builder'
       - release
       - master
+  pull_request_review:
+    types:
+      - submitted
+    branches:
+      - release
+      - release-builder
+  release:
+    types: [published]
   issue_comment:
 
 jobs:
@@ -31,4 +38,37 @@ jobs:
         env:
           GITHUB_CONTEXT_EVENT: ${{ toJSON(github.event) }}
         run: echo "$GITHUB_CONTEXT_EVENT"
+
+      - name: Checkout my repo
+        uses: actions/checkout@v2
+        with:
+          ref: release
+
+      - name: Match PR and parse version increase info
+        if: ${{ pull_request_review == github.event_name }}
+        run: |
+          echo "PR review for ${{ github.event.pull_request.title }}"
+          echo "Parsing for instructions on increasing version."
+          comment=$(gh pr view -c -c --json comments --jq '.comments[] | "\(.createdAt)\t\(.body)"' | sort | cut -f2 | grep "version" | tail -n1)
+          revbody="${{ github.event.review.body }}"
+          if [ -n "$revbody" ] ; then
+            if echo "$revbody" | grep version >/dev/null ; then
+              incver=$(echo "$revbody" | sed -e 's/.* increase \(minor|patch\) version.*/\1/')
+            fi
+          fi
+          if [ -z "$incver" ] ; then
+            echo "Found no version instructions in review body."
+            if echo "$comment" | grep version >/dev/null ; then
+              incver=$(echo "$comment" | sed -e 's/.* increase \(minor|patch\) version.*/\1/')
+            fi
+          fi
+          if [ -n "$incver" ] ; then
+            echo "Found version increment instruction: >$incver<"
+            if [ "$incver" == minor -o "$invcer" == patch ] ; then
+              echo "$incver" >> "$GITHUB_ENV"
+            else
+              echo "No viable version increment instruction found. Using default: patch"
+              echo "patch" >> "$GITHUB_ENV"
+            fi
+          fi
 
