@@ -61,14 +61,14 @@ jobs:
           revbody="${{ github.event.review.body }}"
           if [ -n "$revbody" ] ; then
             if echo "$revbody" | grep version >/dev/null ; then
-              incver=$(echo "$revbody" | grep -E 'ncre(ase|ment) .* version' | sed -e 's/.* [Ii]ncre\(ase\|ment\) \([^ ]\{1,\}\) version.*/\2/')
+              incver=$(echo "$revbody" | grep -E 'ncre(ase|ment) .* version' | sed -e 's/.*[Ii]ncre\(ase\|ment\) \([^ ]\{1,\}\) version.*/\2/')
             fi
           fi
           if [ -z "$incver" ] ; then
             echo "Found no version instructions in review body."
             comment=$(gh pr view -c --json comments --jq '.comments[] | "\(.createdAt)\t\(.body)"' | sort | cut -f2 | grep "version" | tail -n1)
             if echo "$comment" | grep version >/dev/null ; then
-              incver=$(echo "$comment" | grep -E 'ncre(ase|ment) .* version' | sed -e 's/.* [Ii]ncre\(ase\|ment\) \([^ ]\{1,\}\) version.*/\2/')
+              incver=$(echo "$comment" | grep -E 'ncre(ase|ment) .* version' | sed -e 's/.*[Ii]ncre\(ase\|ment\) \([^ ]\{1,\}\) version.*/\2/')
             fi
           fi
           if [ -n "$incver" ] ; then
