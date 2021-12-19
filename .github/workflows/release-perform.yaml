@@ -48,6 +48,8 @@ jobs:
 
       - name: Match PR and parse version increase info
         if: ${{ 'pull_request_review' == github.event_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "PR review for ${{ github.event.pull_request.title }}"
           if [ "${{github.event.review.state}}" != approved ] ; then
@@ -60,22 +62,26 @@ jobs:
           revbody="${{ github.event.review.body }}"
           if [ -n "$revbody" ] ; then
             if echo "$revbody" | grep version >/dev/null ; then
-              incver=$(echo "$revbody" | sed -e 's/.* [Ii]ncrease \(minor|patch\) version.*/\1/')
+              incver=$(echo "$revbody" | grep version | sed -e 's/.* [Ii]ncrease \(minor|patch\) version.*/\1/')
             fi
           fi
           if [ -z "$incver" ] ; then
             echo "Found no version instructions in review body."
             if echo "$comment" | grep version >/dev/null ; then
-              incver=$(echo "$comment" | sed -e 's/.* [Ii]ncrease \(minor|patch\) version.*/\1/')
+              incver=$(echo "$comment" | grep version | sed -e 's/.* [Ii]ncrease \(minor|patch\) version.*/\1/')
             fi
           fi
           if [ -n "$incver" ] ; then
             echo "Found version increment instruction: >$incver<"
             if [ "$incver" == minor -o "$invcer" == patch ] ; then
-              echo "$incver" >> "$GITHUB_ENV"
+              echo "INCVER=$incver" >> "$GITHUB_ENV"
             else
               echo "No viable version increment instruction found. Using default: patch"
-              echo "patch" >> "$GITHUB_ENV"
+              echo "INCVER=patch" >> "$GITHUB_ENV"
             fi
           fi
+
+      - name: Increase version
+        run: |
+          echo "I think we should increase the $INCVER version."
 
