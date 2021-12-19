@@ -51,7 +51,7 @@ jobs:
         run: |
           echo "PR review for ${{ github.event.pull_request.title }}"
           if [ "$github.event.review.state" != approved ] ; then
-            echo "PR review did not approve. ($github.event.review.state)"
+            echo "PR review did not approve. (${{github.event.review.state}})"
             echo "Finishing here."
             exit 0
           fi
