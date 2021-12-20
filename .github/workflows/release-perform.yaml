@@ -81,6 +81,16 @@ jobs:
             fi
           fi
 
+      # Find a commit adding this workflow to the release branch and remove it.
+      # That involves resetting the release tag if necessary.
+      - name: Remove perform workflow commit
+        run: |
+          rpwfcommit=$(git log --oneline master..HEAD | grep "Fix syntax"| cut -d' ' -f1)
+          if [ -n "$rpwfcommit" ] ; then
+            echo "Removing commit $rpwfcommit from release branch."
+          fi
+          
+
       - name: Increase version
         run: |
           echo "I think we should increase the $INCVER version."
