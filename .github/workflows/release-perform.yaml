@@ -3,11 +3,8 @@ name: Perform release
 on:
   pull_request:
     types:
-      - edited
       - closed
-      - ready_for_review
     branches:
-      - 'release-builder'
       - release
       - master
   pull_request_review:
@@ -18,12 +15,21 @@ on:
       - release-builder
   release:
     types: [published]
-  issue_comment:
+
 
 jobs:
   info:
     name: Get event info
     runs-on: ubuntu-latest
+    outputs:
+      pr_review_approved: ${{steps.pr-review.outputs.continue}}
+      incver: ${{steps.pr-review.outputs.incver}}
+    env:
+      GH_ORG: flaix
+      moxie: moxie-0.9.4/bin/moxie
+      versinfo: ../verinf.sh
+      targetBranch: master
+
 
     steps:
       - name: Get event environment
@@ -41,17 +47,45 @@ jobs:
           echo "Action event name: ${{ github.event_name }}"
           echo "$GITHUB_CONTEXT_EVENT"
 
+      - name: Setup Moxie
+        run: |
+          wget http://gitblit.github.io/moxie/maven/com/gitblit/moxie/moxie+ant/0.9.4/moxie+ant-0.9.4.tar.gz
+          tar -xzf moxie+ant-0.9.4.tar.gz
+          $moxie -version
+
+
       - name: Checkout my repo
         uses: actions/checkout@v2
         with:
           ref: release
+          path: gitblit
+
+      - name: Determine relase version and tag name
+        working-directory: gitblit
+        run:  |
+          ../$moxie -DversionInfo=${versinfo} determineReleaseVersion > /dev/null
+          cat ${versinfo} >> $GITHUB_ENV
+          . ${versinfo}
+          echo "Perform release of version $GBLT_RELEASE_VERSION with tag $GBLT_RELEASE_TAG"
+
 
       - name: Match PR and parse version increase info
+        id: pr-review
         if: ${{ 'pull_request_review' == github.event_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: gitblit
         run: |
-          echo "PR review for ${{ github.event.pull_request.title }}"
+          echo "PR for ${{ github.event.pull_request.title }}"
+          if [ "${{ github.event.pull_request.title }}" ~= "Perform release of version " ] ; then
+            prver="${{ github.event.pull_request.title }}"
+            prver="${prver%%Perform release of version }"
+            if [ x"$prver" != x"${{ env.GBLT_RELEASE_TAG }}" ] ; then
+              echo "Version of PR and release version do not match."
+              echo "Finishing here."
+              exit 0
+            fi
+          fi
           if [ "${{github.event.review.state}}" != approved ] ; then
             echo "PR review did not approve. (${{github.event.review.state}})"
             echo "Finishing here."
@@ -74,24 +108,183 @@ jobs:
           if [ -n "$incver" ] ; then
             echo "Found version increment instruction: >$incver<"
             if [ "$incver" == minor -o "$invcer" == patch ] ; then
-              echo "INCVER=$incver" >> "$GITHUB_ENV"
+              echo "INCVER=$incver" > ../incver.sh
             else
               echo "No viable version increment instruction found. Using default: patch"
-              echo "INCVER=patch" >> "$GITHUB_ENV"
+              echo "INCVER=patch" > ../incver.sh
             fi
+          fi
+          echo "::set-output name=continue::true"
+          echo "::set-output name=incver::$incver"
+
+
+      - name: Remove release branch when PR was closed unmerged
+        if: ${{ 'pull_request' == github.event_name }}
+        run: |
+          echo "PR for ${{ github.event.pull_request.title }} was ${{ github.event.action }}"
+          if [ "${{ github.event.pull_request.title }}" ~= "Perform release of version " ] ; then
+            prver="${{ github.event.pull_request.title }}"
+            prver="${prver%%Perform release of version }"
+            if [ x"$prver" != x"${{ env.GBLT_RELEASE_TAG }}" ] ; then
+              echo "Version of PR and release version do not match."
+              echo "Finishing here."
+              exit 0
+            fi
+          fi
+
+          if [ "${{ github.event.action }}" == "closed" ] ; then
+            echo "PR was closed. Checking state."
+            if [ "${{github.event.pull_request.merged}}" == "true" ] ; then
+              echo "PR was merged. We probably shouldn't need to do anything."
+            else
+              echo "PR was closed unmerged. Clean up release branch."
+              if [ -n "$(git ls-remote --heads origin release" ] ; then
+                echo "Clean up release branch"
+                git push --delete release
+              else
+                echo "No release branch exists on remote. Nothing to do."
+              fi
+            fi
+          fi
+
+      - name: Upload results as artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: release-info
+          path: |
+            moxie-0.9.4
+            verinf.sh
+            incver.sh
+
+
+
+
+  perform:
+    name: Perform release
+    runs-on: ubuntu-latest
+    needs: info
+    if: ${{needs.info.outputs.pr_review_approved == 'true'}}
+    env:
+      GH_ORG: flaix
+      moxie: moxie-0.9.4/bin/moxie
+      versinfo: ../verinf.sh
+      targetBranch: master
+      INCVER: ${{needs.info.outputs.incver}}
+      RPWF_COMMIT_MSG: 'Release: Add Release Perform workflow'
+      RPWF_FILENAME: '.github/workflows/release-perform.yaml'
+
+
+    steps:
+
+      - name: Download release info results
+        uses: actions/download-artifact@v2
+        with:
+          name: release-info
+
+      - name: Checkout my repo
+        uses: actions/checkout@v2
+        with:
+          ref: release
+          path: gitblit
+
+      - name: Check incver info we got
+        run: |
+          echo "We think that we got INCVER from info: ${{env.INCVER}}"
+          if [ -f incver.sh ] ; then
+            . incver.sh
+            echo "We got INCVER from the artifact: $INCVER"
+          else
+            echo "Nothing was passed via an artifact"
+          fi
+
+      - name: Check release info we got
+        working-directory: gitblit
+        run: |
+          if [ -f ${versinfo} ] ; then
+            cat ${versinfo} >> $GITHUB_ENV
+            . ${versinfo}
+            echo "Perform release of version $GBLT_RELEASE_VERSION with tag $GBLT_RELEASE_TAG"
+          else
+            echo "No release version info was passed via an artifact"
+            echo "Do not like this. Bail out."
+            exit 1
           fi
 
       # Find a commit adding this workflow to the release branch and remove it.
       # That involves resetting the release tag if necessary.
       - name: Remove perform workflow commit
+        working-directory: gitblit
         run: |
-          rpwfcommit=$(git log --oneline master..HEAD | grep "Fix syntax"| cut -d' ' -f1)
+          rpwfcommit=$(git log --oneline master..HEAD | grep "$RPWF_COMMIT_MSG"| cut -d' ' -f1)
           if [ -n "$rpwfcommit" ] ; then
             echo "Removing commit $rpwfcommit from release branch."
+            GIT_SEQUENCE_EDITOR="sed -i -e 's/^pick ${rpwfcommit}/drop ${rpwfcommit}/'" git rebase -i "${$rpwfcommit}~1"
+            echo "Making sure that the tree between the HEAD and release tag are still the same."
+            if git diff-tree --name-only "${{ env.GBLT_RELEASE_TAG }}" HEAD | grep -v "${{env.RPWF_FILENAME}}" ; then
+              echo "Found more changed files between release tag and rebased HEAD. Something is not right."
+              echo "Need to abort here."
+              exit 1
+            fi
+            echo "Moving release tag and pushing results"
+            git tag -f ${{ env.GBLT_RELEASE_TAG }}
+            git push -f origin release
+            git push -f origin ${{ env.GBLT_RELEASE_TAG }}
           fi
           
+      - name: Merge relase branch to master
+        working-directory: gitblit
+        run: |
+          git checkout ${{env.targetBranch}}
+          git merge release
+
 
       - name: Increase version
+        working-directory: gitblit
         run: |
-          echo "I think we should increase the $INCVER version."
+          echo "Increase ${{env.INCVER}} version"
+          if [ -z "${{env.INCVER}}" -o ${{env.INCVER}}" == minor ] ; then
+              ../$moxie nextPointReleaseCycle
+          elif [ "${{env.INCVER}}" == patch ] ; then
+              ../$moxie nextMinorReleaseCycle
+          else
+              echo "Don't know how to increase ${{env.INCVER}} version. Using patch version instead."
+              ../$moxie nextPointReleaseCycle
+          fi
+
+      - name: Publish release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: gitblit
+        run: |
+          ./$moxie publishRelease
+
+      # Pushing the master with the merged relase branch should close the PR
+      - name: Push target branch
+        working-directory: gitblit
+        run: |
+          git push origin ${{env.targetBranch}}
+
+
+      - name: Check for closed PR and clean up release branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: gitblit
+        run: |
+          checks=10
+          while [ $checks -gt 0 ] ; do
+            prstate=$(gh pr view --json state --jq '.state')
+            if [ "$prstate" == OPEN ] ; then
+              sleep 1
+              : $((checks--))
+            else
+              echo "PR is now $prstate"
+              checks=0
+            fi
+          done
+          
+          if [ "$prstate" != OPEN ] ; then
+            echo "Removing release branch"
+            git branch -D release
+            git push --delete release
+          fi
 
