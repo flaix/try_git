@@ -49,5 +49,5 @@ r1: {
 }
 
 snapshot: ~
-release: &r2
-releases: &r[1..2]
+release: &r3
+releases: &r[1..3]
