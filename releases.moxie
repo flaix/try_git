@@ -1,10 +1,10 @@
 #
-# ${project.version} release
+# 0.1.0 release
 #
 r3: {
-    title: ${project.name} ${project.version} released
-    id: ${project.version}
-    date: ${project.buildDate}
+    title: Try Git 0.1.0 released
+    id: 0.1.0
+    date: 2022-01-02
     note: ''
           This has some code now.
           ''
@@ -48,6 +48,6 @@ r1: {
   - Florian Zschocke
 }
 
-snapshot: &r3
-release: &r1
+snapshot: ~
+release: &r2
 releases: &r[1..2]
