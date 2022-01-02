@@ -1,0 +1,232 @@
+name: Build release version
+
+on:
+  push:
+    branches:
+      - release-builder
+      - release
+
+jobs:
+  build_and_test:
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Setup Java 8
+        uses: actions/setup-java@v1
+        with:
+          java-version: 8
+
+      - name: Report Java version
+        run: |
+          java -version
+          javac -version
+
+      - name: Setup Moxie
+        run: |
+          wget http://gitblit.github.io/moxie/maven/com/gitblit/moxie/moxie+ant/0.9.4/moxie+ant-0.9.4.tar.gz
+          tar -xzf moxie+ant-0.9.4.tar.gz
+          moxie-0.9.4/bin/moxie -version
+
+      - name: Build
+        run: |
+          moxie-0.9.4/bin/moxie
+
+
+  build_release:
+    name: Prepare release build
+    runs-on: ubuntu-latest
+    needs: build_and_test
+    env:
+      GH_ORG: flaix
+      moxie: moxie-0.9.4/bin/moxie
+      versinfo: ../verinf.sh
+      targetBranch: master
+      RPWF_COMMIT_MSG: 'Release: Add release workflows'
+      PREPWF_FILENAME: '.github/workflows/release-prepare.yaml'
+      PERFWF_FILENAME: '.github/workflows/release-perform.yaml'
+
+    steps:
+      - name: Get event environment
+        run: |
+          echo "GITHUB_SHA: $GITHUB_SHA"
+          echo "GITHUB_REF: $GITHUB_REF"
+          echo "GITHUB_HEAD_REF: $GITHUB_HEAD_REF"
+          echo "GITHUB_BASE_REF: $GITHUB_BASE_REF"
+          echo "GITHUB_EVENT_NAME: $GITHUB_EVENT_NAME"
+
+      - name: Dump env context
+        env:
+          GITHUB_CONTEXT_ENV: ${{ toJSON(env) }}
+        run: |
+          echo "Triggering ref: ${{ github.ref }}"
+          echo "Triggering ref name: ${{ github.ref_name }}"
+          echo "$GITHUB_CONTEXT_ENV"
+
+
+      - name: Setup Java 8
+        uses: actions/setup-java@v1
+        with:
+          java-version: 8
+
+      - name: Report Java version
+        run: |
+          java -version
+          javac -version
+
+
+      - name: Set up Git properties
+        run: |
+          set -x
+          git config --global user.name ${{ github.event.pusher.name }}
+          git config --global user.email ${{ github.event.pusher.email }}
+
+
+      - name: Checkout my repo
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 20
+
+      - name: Fetch all remote branches
+        run: |
+          git fetch --prune --depth=20 origin +refs/heads/*:refs/remotes/origin/*
+          git branch -a
+
+
+      - name: Determine fork point
+        run: |
+          if [ "$(git symbolic-ref -q --short HEAD)" != "release-builder" ] ; then
+            echo "Not on release-builder branch. Cannot determine fork point."
+            exit 11
+          fi
+
+          forkPoint=$(git merge-base HEAD origin/$targetBranch)
+          if [ -z "$forkPoint" ] ; then
+            echo "No fork point found to branch release branch off"
+            exit 12
+          fi
+          echo "FORK_POINT=$forkPoint" >> $GITHUB_ENV
+
+      - name: Create or checkout release branch
+        if: ${{ github.ref != 'refs/heads/release' }}
+        run: |
+          if [ -n "$(git branch -l -r origin/release)" ] ; then
+            echo "Checking out existing branch 'release'"
+            git fetch origin +release
+            git checkout release
+          else
+            echo "Creating release branch on commit ${{ env.FORK_POINT }}"
+            git checkout -b release ${{ env.FORK_POINT }}
+          fi
+          [ "$(git symbolic-ref -q --short HEAD)" == "release" ] || exit 1
+
+
+
+      - name: Setup Moxie
+        run: |
+          wget http://gitblit.github.io/moxie/maven/com/gitblit/moxie/moxie+ant/0.9.4/moxie+ant-0.9.4.tar.gz
+          tar -xzf moxie+ant-0.9.4.tar.gz -C ..
+          ../$moxie -version
+          rm moxie+ant-0.9.4.tar.gz
+
+
+
+      - name: Determine relase version and tag name
+        run:  |
+          ../$moxie -DversionInfo=${versinfo} determineReleaseVersion > /dev/null
+          cat ${versinfo} >> $GITHUB_ENV
+          . ${versinfo}
+          echo "Release version $GBLT_RELEASE_VERSION with tag $GBLT_RELEASE_TAG"
+
+
+      # Create a release version and tag the commit. Should the release tag already exist
+      # from a previous run, then move the existing tag to the current tip of the release
+      # branch.
+      - name: Create release version or move existing tag
+        run:  |
+          tagname=$(git rev-parse "${{ env.GBLT_RELEASE_TAG}}" -- 2>/dev/null | head -n1)
+          if [ -z "$tagname" ] ; then
+            ../$moxie tagRelease
+          else
+            echo "Moving tag to current head of release branch"
+            git tag -f "${{ env.GBLT_RELEASE_TAG}}"
+          fi
+
+
+      # Add the workflow files to the release branch. Either because they do not
+      # exist here yet, because release-builder has been pushed for te first time,
+      # or get the latest version on here, because release-builder was updated and
+      # pushed. In the latter case the current commit needs to be removed first.
+      # Which doesn't make the workflow easier, because it requires a force push.
+      - name: Add release workflows to release branch.
+        if: ${{ github.ref == 'refs/heads/release-builder' }}
+        run:  |
+          rpwfcommit=$(git log --oneline origin/master..HEAD | grep "$RPWF_COMMIT_MSG"| cut -d' ' -f1)
+          if [ -n "$rpwfcommit" ] ; then
+            echo "Removing commit $rpwfcommit from release branch."
+            GIT_SEQUENCE_EDITOR="sed -i -e 's/^pick ${rpwfcommit}/drop ${rpwfcommit}/'" git rebase -i "${$rpwfcommit}~1"
+            echo "Making sure that the tree between the HEAD and release tag are still the same."
+            if git diff-tree --name-only "${{ env.GBLT_RELEASE_TAG }}" HEAD | grep -v "${{env.PREPWF_FILENAME}}" | grep -v "${{env.PERFWF_FILENAME}}" ; then
+              echo "Found more changed files between release tag and rebased HEAD. Something is not right."
+              echo "Need to abort here."
+              exit 1
+            fi
+            echo "Moving release tag after rebasing"
+            git tag -f ${{ env.GBLT_RELEASE_TAG }}
+          fi
+
+          echo "Adding release workflows"
+          git merge --squash origin/release-builder
+          git commit -m "$RPWF_COMMIT_MSG"
+
+
+      - name: Push updated release branch and release tag
+        run: |
+          git status
+          git push origin -f release
+          git push -f origin ${{ env.GBLT_RELEASE_TAG }}
+
+
+
+
+      - name: Build release artifacts
+        run: |
+          ../$moxie clean buildAll
+
+
+
+      # Check if there is already a pending draft release.
+      # If so, we update the release notes and the artifacts,
+      # if not, a new release draft is created and artifacts attached.
+      - name: Create release and upload artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -x
+          releaseInfo=$(gh release view ${{ env.GBLT_RELEASE_TAG}} --json name,isDraft || true)
+          if [ -z "$releaseInfo" ] ; then
+            ../$moxie releaseBinaries
+          else
+            ../$moxie -DupdateRelease=true releaseBinaries
+          fi
+
+
+      # Create a pull request as a trigger to perform the release
+      - name: Create release trigger PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh pr view release --json state,title --jq '"\(.state):\(.title)"' | grep OPEN | grep "release of version ${{ env.GBLT_RELEASE_VERSION }}"  ; then
+            echo "PR already exists."
+          elif gh pr view release --json state,title --jq '"\(.state):\(.title)"' | grep OPEN ; then
+            echo "PR already exists but apparently not for our release ${{ env.GBLT_RELEASE_VERSION }}."
+          else
+            gh pr create --title "Perform release of version ${{ env.GBLT_RELEASE_VERSION }}" --base $targetBranch --draft --body "Approve this pull request to perform the release of version ${{ env.GBLT_RELEASE_VERSION }}
+
+            You can add comments, either to the review or the PR, to specify which version to increase."
+          fi
+
+
