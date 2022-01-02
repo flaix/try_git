@@ -414,14 +414,14 @@ GBLT_RELEASE_TAG=${project.tag}
 			<mx:if>
 				<isset property="updateRelease" />
 				<then>
-					<echo>updating release ${release.tag} draft on GitHub</echo>
+					<echo>updating release @{releasetag} draft on GitHub</echo>
 					<exec executable="bash" logError="true" failonerror="true" outputproperty="ghrelease.id">
 						<arg value="-c" />
 						<arg value="${octokit} list_releases ${gh.org} ${gh.repo} _filter='.[] | &quot;\(.name)\t\(.id)&quot;' | grep ${project.version} | cut -f2"></arg>
 					</exec>
 				</then>
 				<else>
-					<echo>creating release ${release.tag} draft on GitHub</echo>
+					<echo>creating release @{releasetag} draft on GitHub</echo>
 					<exec executable="bash" logError="true" failonerror="true" outputproperty="ghrelease.id">
 						<arg value="-c" />
 						<arg value="${octokit} create_release ${gh.org} ${gh.repo} @{releasetag} name=${project.version} draft=true | cut -f2"></arg>
@@ -439,7 +439,7 @@ GBLT_RELEASE_TAG=${project.tag}
 			</exec>
 			<exec executable="bash" logError="true" >
 				<arg value="-c" />
-				<arg value="${octokit} -q edit_release ${gh.org} ${gh.repo} ${ghrelease.id} body='${ghrelease.notes}'"></arg>
+				<arg value="${octokit} -q edit_release ${gh.org} ${gh.repo} ${ghrelease.id} tag_name='@{releasetag}' body='${ghrelease.notes}'"></arg>
 			</exec>
 		</sequential>
 	</macrodef>
