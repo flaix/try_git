@@ -14,7 +14,8 @@ r3: {
           ''
     security: ~
     fixes: ~
-    changes: ~
+    changes:
+      - Straighten out release prepare workflow.
     additions:
       - Add code to print a hello.
     dependencyChanges: ~
