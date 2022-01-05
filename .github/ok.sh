@@ -2011,7 +2011,7 @@ delete_asset() {
     #
     #     ok.sh release_assets <user> <repo> <release_id> \
     #             _filter='.[] | .id' \
-    #         | xargs -L1 ./ok.sh delete_asset "$myuser" "$myrepo" 
+    #         | xargs -L1 ./ok.sh delete_asset "$myuser" "$myrepo"
     #
     # Example of the multi-step process for grabbing the release ID for
     # a specific version, then grabbing the release asset IDs, and then
@@ -2034,7 +2034,7 @@ delete_asset() {
     #   A GitHub repository.
     local asset_id="${3:?Release asset ID required.}"
     #   The unique ID of the release asset; see release_assets.
-    
+
     shift 3
 
     local confirm
@@ -2042,7 +2042,7 @@ delete_asset() {
     _get_confirm 'This will permanently delete a release asset. Continue?'
     [ "$confirm" -eq 1 ] || exit 0
 
-    _delete "/repos/${owner}/${repo}/releases/assets/${asset_id}" 
+    _delete "/repos/${owner}/${repo}/releases/assets/${asset_id}"
     exit $?
 }
 
