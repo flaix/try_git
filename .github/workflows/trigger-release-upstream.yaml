@@ -1,0 +1,103 @@
+name: Perform release upstream
+
+on:
+  push:
+    branches:
+      - release-upstream
+
+env:
+  TARGET_BRANCH: master
+  GH_ORG: flaix
+  GH_UPSTREAM_ORG: flaix
+
+
+jobs:
+
+  info:
+    name: Gather info on how we were called
+    runs-on: ubuntu-latest
+
+
+    steps:
+      - name: Get event environment
+        run: |
+          echo "GITHUB_SHA: $GITHUB_SHA"
+          echo "GITHUB_RFE: $GITHUB_REF"
+          echo "GITHUB_HEAD_REF: $GITHUB_HEAD_REF"
+          echo "GITHUB_BASE_REF: $GITHUB_BASE_REF"
+          echo "GITHUB_EVENT_NAME: $GITHUB_EVENT_NAME"
+
+      - name: Dump event payload
+        env:
+          GITHUB_CONTEXT_EVENT: ${{ toJSON(github.event) }}
+        run: |
+          echo "Action event name: ${{ github.event_name }}"
+          echo "$GITHUB_CONTEXT_EVENT"
+
+
+  release-info:
+    name: Gather info on the release
+    runs-on: ubuntu-latest
+    needs: info
+    if: ${{ github.repository == 'flaix/try_git' && github.event_name == 'push' }}
+    env:
+      moxie: moxie-0.9.4/bin/moxie
+      versinfo: ../verinf.sh
+      relinfo: relinfo.sh
+
+    steps:
+      - name: Setup Moxie
+        run: |
+          wget http://gitblit.github.io/moxie/maven/com/gitblit/moxie/moxie+ant/0.9.4/moxie+ant-0.9.4.tar.gz
+          tar -xzf moxie+ant-0.9.4.tar.gz
+          $moxie -version
+          rm moxie+ant-0.9.4.tar.gz
+
+
+      - name: Checkout my repo
+        uses: actions/checkout@v2
+        with:
+          path: gitblit
+          fetch-depth: 20
+
+      - name: Fetch all remote branches
+        working-directory: gitblit
+        run: |
+          git fetch --prune --depth=20 origin +refs/heads/*:refs/remotes/origin/*
+          git branch -a
+          git tag -l
+
+
+      - name: Determine relase version and tag name
+        working-directory: gitblit
+        run:  |
+          ../$moxie -DversionInfo=${versinfo} determineReleaseVersion > /dev/null
+          cat ${versinfo} >> $GITHUB_ENV
+          . ${versinfo}
+          echo "Perform release of version $GBLT_RELEASE_VERSION with tag $GBLT_RELEASE_TAG"
+
+
+      - name: Gather release user 
+        run: |
+          if [ -n "${{github.event.pusher.name}}" ] ; then
+            echo "REL_USER=${{github.event.pusher.name}}" >> ${{env.relinfo}}
+            echo "Perform release as user: ${{github.event.pusher.name}}"
+          fi
+
+
+      - name: Upload results as artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: release-info
+          path: |
+            verinf.sh
+            ${{env.relinfo}}
+
+
+
+  call-upstream:
+    name: Upstream release
+    needs: release-info
+    uses: flaix/try_git/.github/workflows/release-upstream.yaml@release-upstream
+    secrets:
+      GITBLIT_RELEASE_PAT: ${{ secrets.GITBLIT_RELEASE_PAT }}
