@@ -1,0 +1,136 @@
+name: Perform release upstream
+
+on:
+  workflow_call:
+    secrets:
+      GITBLIT_RELEASE_PAT:
+        required: true
+
+env:
+  TARGET_BRANCH: master
+  GH_ORG: flaix
+  GH_UPSTREAM_ORG: flaix
+
+
+jobs:
+
+  info:
+    name: Gather info on how we were called
+    runs-on: ubuntu-latest
+
+
+    steps:
+      - name: Get event environment
+        run: |
+          echo "GITHUB_SHA: $GITHUB_SHA"
+          echo "GITHUB_RFE: $GITHUB_REF"
+          echo "GITHUB_HEAD_REF: $GITHUB_HEAD_REF"
+          echo "GITHUB_BASE_REF: $GITHUB_BASE_REF"
+          echo "GITHUB_EVENT_NAME: $GITHUB_EVENT_NAME"
+
+      - name: Dump event payload
+        env:
+          GITHUB_CONTEXT_EVENT: ${{ toJSON(github.event) }}
+        run: |
+          echo "Action event name: ${{ github.event_name }}"
+          echo "$GITHUB_CONTEXT_EVENT"
+
+
+
+  upstream:
+    name: Perform upstream release
+    runs-on: ubuntu-latest
+    needs: info
+    env:
+      moxie: moxie-0.9.4/bin/moxie
+      versinfo: verinf.sh
+      relinfo: relinfo.sh
+
+
+    steps:
+
+      - name: Download release info results
+        uses: actions/download-artifact@v2
+        with:
+          name: release-info
+
+      - name: Add release info to environment
+        run: |
+          if [ -f ${{env.relinfo}} ] ; then
+            cat ${{env.relinfo}} >> $GITHUB_ENV
+            . ${{env.relinfo}}
+            echo "Perform release in name of user: $REL_USER"
+          else
+            echo "No release info was passed via an artifact."
+            echo "Do not like this. Bail out."
+            exit 11
+          fi
+
+          if [ -f ${versinfo} ] ; then
+            cat ${versinfo} >> $GITHUB_ENV
+            . ${versinfo}
+            echo "Perform release of version $GBLT_RELEASE_VERSION with tag $GBLT_RELEASE_TAG"
+          else
+            echo "No release version info was passed via an artifact."
+            echo "Do not like this. Bail out."
+            exit 12
+          fi
+
+
+
+      - name: Checkout my repo
+        uses: actions/checkout@v2
+        with:
+          path: gitblit
+          fetch-depth: 20
+          token: ${{ secrets.GITBLIT_RELEASE_PAT }}
+
+      - name: Fetch all remote branches
+        working-directory: gitblit
+        run: |
+          git fetch --prune --depth=20 origin +refs/heads/*:refs/remotes/origin/*
+          git branch -a
+          git tag -l
+
+      - name: Set up Git properties
+        working-directory: gitblit
+        run: |
+          # If present, use the user that triggered the release perform workflow with an action
+          if [ -n "$REL_USER" ] ; then
+            commit=$(git rev-list --all -i --max-count=1 --author="$REL_USER")
+            if [ -n "$commit" ] ; then
+              user_name="$(git show --no-patch --pretty=format:"%an" $commit)"
+              user_email="$(git show --no-patch --pretty=format:"%ae" $commit)"
+            else
+              # Use the user name, but my email
+              user_name="$REL_USER"
+              user_email="2362065+flaix@users.noreply.github.com"
+            fi
+          else
+              # Use my user name and my email
+              user_name="flaix"
+              user_email="2362065+flaix@users.noreply.github.com"
+          fi
+
+          set -x
+          git config --global user.name ${user_name}
+          git config --global user.email ${user_email}
+
+
+      - name: Release gitblit upstream
+        working-directory: gitblit
+        run: |
+          git remote -v
+          set -x
+          ups_url=$(git remote get-url origin | sed -e 's;github.com/${{ env.GH_ORG }}/.*;github.com/${{ env.GH_UPSTREAM_ORG }}/gitblit;')
+          git remote add upstream "$ups_url"
+          git fetch --prune --depth=20 upstream +refs/heads/*:refs/remotes/upstream/*
+          git checkout jenkins-tests
+          echo "Push new master to upstream"
+          echo "A beetroot" >> beetroot.txt
+          git add beetroot.txt
+          git commit -m "Is it a beetroot?"
+          git push upstream jenkins-tests
+          echo "Push release tag $GBLT_RELEASE_TAG to upstream"
+          echo "Push new gh-pages to upstream"
+
