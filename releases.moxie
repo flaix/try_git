@@ -1,4 +1,22 @@
 #
+# ${project.version} release
+#
+r5: {
+    title: ${project.name} ${project.version} released
+    id: ${project.version}
+    date: ${project.buildDate}
+    note: ~
+    html: ~
+    text: ~
+    security: ~
+    fixes: ~
+    changes: ~
+    additions: ~
+    dependencyChanges: ~
+    contributors: ~
+}
+
+#
 # 0.2.0 release
 #
 r4: {
@@ -85,6 +103,6 @@ r1: {
   - Florian Zschocke
 }
 
-snapshot: ~
+snapshot: &r5
 release: &r4
 releases: &r[1..4]
