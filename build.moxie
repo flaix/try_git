@@ -10,12 +10,12 @@ name: Try Git
 description: Trying out Git and Github stuff
 groupId: net.flaix
 artifactId: trygit
-version: 0.2.0-SNAPSHOT
+version: 0.2.0
 inceptionYear: 2011
 
 # Current stable release
-releaseVersion: 0.1.1
-releaseDate: 2022-01-05
+releaseVersion: 0.2.0
+releaseDate: 2022-01-09
 
 # Mainclass is used for setting jar manifests and using the mx:run target
 mainclass: net.flaix.TryGit
