@@ -10,7 +10,7 @@ name: Try Git
 description: Trying out Git and Github stuff
 groupId: net.flaix
 artifactId: trygit
-version: 0.2.1
+version: 0.2.2-SNAPSHOT
 inceptionYear: 2011
 
 # Current stable release
