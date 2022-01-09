@@ -16,6 +16,9 @@ on:
   release:
     types: [published]
 
+env:
+  TARGET_BRANCH: master
+
 
 jobs:
   info:
@@ -29,7 +32,6 @@ jobs:
       moxie: moxie-0.9.4/bin/moxie
       versinfo: ../verinf.sh
       relinfo: relinfo.sh
-      targetBranch: master
 
 
     steps:
@@ -181,7 +183,7 @@ jobs:
                 echo "No release branch exists on remote. Nothing to do."
               fi
 
-              if git tag --contains $(git rev-list  origin/$targetBranch..release | tail -n1) | grep ${{ env.GBLT_RELEASE_TAG }} ; then
+              if git tag --contains $(git rev-list  origin/$TARGET_BRANCH..release | tail -n1) | grep ${{ env.GBLT_RELEASE_TAG }} ; then
                 echo "Release tag is only on release branch. Deleting release tag."
                 git push --delete origin ${{ env.GBLT_RELEASE_TAG }}
                 # We should probably also remove the release draft here
@@ -215,12 +217,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: info
     if: ${{needs.info.outputs.pr_review_approved == 'true'}}
+    outputs:
+      release_upstream: ${{steps.pr-close.outputs.release_upstream}}
     env:
       GH_ORG: flaix
       moxie: moxie-0.9.4/bin/moxie
       versinfo: verinf.sh
       relinfo: relinfo.sh
-      targetBranch: master
       INCVER: ${{needs.info.outputs.incver}}
       RPWF_COMMIT_MSG: 'Release: Add release workflows'
       PREPWF_FILENAME: '.github/workflows/release-prepare.yaml'
@@ -239,6 +242,20 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: release-info
+
+      - name: Test transport of environment
+        env:
+          JOB_NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "Our target branch is $TARGET_BRANCH"
+          echo "We can get from needs.info: ${{needs.info.env.TARGET_BRANCH }}"
+
+          echo "$JOB_NEEDS"
+
+          if [ "$TARGET_BRANCH" != master ] ; then
+            echo "The target branch is not set correctly."
+            exit 100
+          fi
 
       - name: Check incver info we got
         run: |
@@ -344,8 +361,8 @@ jobs:
       - name: Merge relase branch to master
         working-directory: gitblit
         run: |
-          git checkout ${{env.targetBranch}}
-          git merge -m "Merge release branch into $targetBranch after release $GBLT_RELEASE_VERSION" release
+          git checkout ${{env.TARGET_BRANCH}}
+          git merge -m "Merge release branch into $TARGET_BRANCH after release $GBLT_RELEASE_VERSION" release
 
           #  echo "Pushing updated release branch"
           #  git push -f origin release
@@ -380,18 +397,26 @@ jobs:
           echo "Pushing updated release branch"
           git push -f origin release:release
           sleep 1
-          echo "Pushing updated $targetBranch branch"
-          git push origin ${{env.targetBranch}}
+          echo "Pushing updated $TARGET_BRANCH branch"
+          git push origin ${{env.TARGET_BRANCH}}
 
 
       - name: Check for closed PR and clean up release branch
+        id: pr-close
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         working-directory: gitblit
         run: |
           checks=10
           while [ $checks -gt 0 ] ; do
-            prstate=$(gh pr view release --json state --jq '.state')
+            prret=$(gh pr view release --json state,isDraft,title --jq '"\(.state);\(.isDraft);\(.title)"' || true)
+            if [ -n "$prret" ] ; then
+              prstate=${prret%%;*}
+              prdraft=${prret#*;}
+              prtitle=${prdraft#*;}
+              prdraft=${prdraft%%;*}
+            fi
+
             if [ -z "$prstate" ] ; then
               echo "No PR found for release branch."
               gh pr view release
@@ -410,7 +435,114 @@ jobs:
             echo "Removing release branch"
             git push --delete origin release
             git branch -D release
+
+            if [ -n "${prdraft}" -a "${prdraft}" == false ] ; then
+              echo "PR was not a draft, continue with upstreaming the release."
+              echo "::set-output name=release_upstream::true"
+            fi
           else
             echo "::notice ::The pull request was not closed and needs to be closed manually"
           fi
+
+
+  upstream:
+    name: Upstream release
+    runs-on: ubuntu-latest
+    needs: perform
+    if: ${{needs.perform.outputs.release_upstream == 'true'}}
+    env:
+      GH_ORG: flaix
+      GH_UPSTREAM_ORG: flaix
+      moxie: moxie-0.9.4/bin/moxie
+      versinfo: verinf.sh
+      relinfo: relinfo.sh
+
+
+    steps:
+
+      - name: Download release info results
+        uses: actions/download-artifact@v2
+        with:
+          name: release-info
+
+      - name: Add release info to environment
+        run: |
+          echo "Working with target branch >$TARGET_BRANCH<"
+          if [ -f ${{env.relinfo}} ] ; then
+            cat ${{env.relinfo}} >> $GITHUB_ENV
+            . ${{env.relinfo}}
+            echo "We got INCVER from the artifact: $INCVER"
+            echo "Perform release in name of user: $REL_USER"
+          else
+            echo "No release info was passed via an artifact."
+            echo "Do not like this. Bail out."
+            exit 11
+          fi
+
+          if [ -f ${versinfo} ] ; then
+            cat ${versinfo} >> $GITHUB_ENV
+            . ${versinfo}
+            echo "Perform release of version $GBLT_RELEASE_VERSION with tag $GBLT_RELEASE_TAG"
+          else
+            echo "No release version info was passed via an artifact."
+            echo "Do not like this. Bail out."
+            exit 12
+          fi
+
+
+
+      - name: Checkout my repo
+        uses: actions/checkout@v2
+        with:
+          ref: release
+          path: gitblit
+          fetch-depth: 20
+
+      - name: Fetch all remote branches
+        working-directory: gitblit
+        run: |
+          git fetch --prune --depth=20 origin +refs/heads/*:refs/remotes/origin/*
+          git branch -a
+          git tag -l
+
+      - name: Set up Git properties
+        working-directory: gitblit
+        run: |
+          # If present, use the user that triggered the release perform workflow with an action
+          if [ -n "$REL_USER" ] ; then
+            commit=$(git rev-list --all -i --max-count=1 --author="$REL_USER")
+            if [ -n "$commit" ] ; then
+              user_name="$(git show --no-patch --pretty=format:"%an" $commit)"
+              user_email="$(git show --no-patch --pretty=format:"%ae" $commit)"
+            else
+              # Use the user name, but my email
+              user_name="$REL_USER"
+              user_email="2362065+flaix@users.noreply.github.com"
+            fi
+          else
+              # Use my user name and my email
+              user_name="flaix"
+              user_email="2362065+flaix@users.noreply.github.com"
+          fi
+
+          set -x
+          git config --global user.name ${user_name}
+          git config --global user.email ${user_email}
+
+
+      - name: Release gitblit upstream
+        working-directory: gitblit
+        run: |
+          git remote -v
+          ups_url=$(git remote get-url origin | sed -e 's/github.com:.*/github.com:${{ env.GH_UPSTREAM_ORG }}/gitblit')
+          git remote add upstream "$ups_url"
+          git fetch --prune --depth=20 upstream +refs/heads/*:refs/remotes/origin/*
+          git checkout jenkins-tests
+          echo "Push new master to upstream"
+          echo "A beetroot" >> beetrot.txt
+          git add beetroot.txt
+          git commit -m "Is it a beetroot?"
+          git push upstream jenkins-tests
+          echo "Push release tag $GBLT_RELEASE_TAG to upstream"
+          echo "Push new gh-pages to upstream"
 
