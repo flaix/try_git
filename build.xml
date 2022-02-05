@@ -66,6 +66,7 @@
 			<arg value="-version" />
 		</exec>
 		<echo>Java/JVM version: ${java.version}</echo>
+		<echo>Github coordinates: ${gh.org}/${gh.repo}</echo>
 	</target>
 
 	
