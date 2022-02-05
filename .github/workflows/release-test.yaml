@@ -1,0 +1,97 @@
+name: Build release version
+
+on:
+  push:
+    branches:
+      - release-test
+
+jobs:
+  build_release:
+    name: Prepare release build
+    runs-on: ubuntu-latest
+    env:
+      GH_ORG: flaix
+      GH_UPSTREAM_ORG: gitblit
+      moxie: moxie-0.9.4/bin/moxie
+      versinfo: ../verinf.sh
+      targetBranch: master
+
+    steps:
+      - name: Get event environment
+        run: |
+          echo "GITHUB_SHA: $GITHUB_SHA"
+          echo "GITHUB_REF: $GITHUB_REF"
+          echo "GITHUB_HEAD_REF: $GITHUB_HEAD_REF"
+          echo "GITHUB_BASE_REF: $GITHUB_BASE_REF"
+          echo "GITHUB_EVENT_NAME: $GITHUB_EVENT_NAME"
+
+      - name: Dump env context
+        env:
+          GITHUB_CONTEXT_ENV: ${{ toJSON(env) }}
+        run: |
+          echo "Triggering ref: ${{ github.ref }}"
+          echo "Triggering ref name: ${{ github.ref_name }}"
+          echo "$GITHUB_CONTEXT_ENV"
+
+
+      - name: Setup Java 7
+        uses: actions/setup-java@v1
+        with:
+          java-version: 7
+
+      - name: Report Java version
+        run: |
+          java -version
+          javac -version
+
+
+      - name: Set up Git properties
+        run: |
+          set -x
+          git config --global user.name ${{ github.event.pusher.name }}
+          git config --global user.email ${{ github.event.pusher.email }}
+
+
+      - name: Checkout my repo
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 20
+
+      - name: Fetch all remote branches
+        run: |
+          git fetch --prune --depth=20 origin +refs/heads/*:refs/remotes/origin/*
+          git branch -a
+
+
+      - name: Checkout my gitblit repo for process
+        uses: actions/checkout@v2
+        with:
+          path: gitblit
+          repository: ${{ env.GH_ORG }}/gitblit
+          token: ${{ secrets.INTER_REPO_OPS_PAT }}
+          fetch-depth: 20
+          submodules: true
+
+      - name: Fetch all remote branches
+        working-directory: gitblit
+        run: |
+          git fetch --prune --depth=20 origin +refs/heads/*:refs/remotes/origin/*
+          git branch -a
+
+
+
+
+      - name: Checkout upstream gitblit as reference
+        uses: actions/checkout@v2
+        with:
+          path: gitblit-ref
+          repository: ${{ env.GH_UPSTREAM_ORG }}/gitblit
+          token: ${{ secrets.GITBLIT_RELEASE_PAT }}
+          fetch-depth: 20
+
+      - name: Fetch all branches from upstream gitblit reference
+        working-directory: gitblit-ref
+        run: |
+          git fetch --no-tags --prune --depth=20 origin +refs/heads/*:refs/remotes/origin/*
+          git branch -a
+
