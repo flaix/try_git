@@ -1,4 +1,4 @@
-name: Build release version
+name: Release action tests
 
 on:
   push:
