@@ -1,4 +1,4 @@
-name: Continous build - build and test on every push
+name: Test checkouts
 
 on:
   push:
@@ -7,25 +7,103 @@ on:
       - gh-pages
 
 jobs:
-  build:
-    name: Build and test
+  comev2:
+    name: Checkout with V2 - me
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        java-version: [7, 8, 11]
     
     steps:
-      - name: Setup Java ${{ matrix.java-version }}
-        uses: actions/setup-java@v1
+      - name: Check where we are
+        run: |
+          set -x
+          echo "GITHUB_WORKSPACE is $GITHUB_WORKSPACE"
+          pwd
+          ls -lR
+
+      - uses: actions/checkout@v2
+
+      - name: Check after checkout
+        run: |
+          set -x
+          echo "GITHUB_WORKSPACE is $GITHUB_WORKSPACE"
+          pwd
+          ls -lR
+          echo And above
+          ls -l ..
+
+  coyouv2:
+    name: Checkout with V2 - you
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check where we are
+        run: |
+          set -x
+          echo "GITHUB_WORKSPACE is $GITHUB_WORKSPACE"
+          pwd
+          ls -lR
+
+      - uses: actions/checkout@v2
         with:
-          java-version: ${{ matrix.java-version }}
+          repository: gitblit/gitblit-docker
+          ref: master
+          fetch-depth: 2
 
-      - name: Report Java version
+      - name: Check after checkout
         run: |
-          java -version
-          javac -version
+          set -x
+          echo "GITHUB_WORKSPACE is $GITHUB_WORKSPACE"
+          pwd
+          ls -lR
+          echo And above
+          ls -l ..
 
-      - name: Build with Ant
+  comev3:
+    name: Checkout with V3 - me
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check where we are
         run: |
-          if ant -version 2> /dev/null ; then echo works ; else echo breaks ; fi
-          ant -version && echo works || echo breaks
+          set -x
+          echo "GITHUB_WORKSPACE is $GITHUB_WORKSPACE"
+          pwd
+          ls -lR
+
+      - uses: actions/checkout@v3
+
+      - name: Check after checkout
+        run: |
+          set -x
+          echo "GITHUB_WORKSPACE is $GITHUB_WORKSPACE"
+          pwd
+          ls -lR
+          echo And above
+          ls -l ..
+
+  coyouv3:
+    name: Checkout with V3 - you
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check where we are
+        run: |
+          set -x
+          echo "GITHUB_WORKSPACE is $GITHUB_WORKSPACE"
+          pwd
+          ls -lR
+
+      - uses: actions/checkout@v3
+        with:
+          repository: gitblit/gitblit-docker
+          ref: master
+          fetch-depth: 2
+
+      - name: Check after checkout
+        run: |
+          set -x
+          echo "GITHUB_WORKSPACE is $GITHUB_WORKSPACE"
+          pwd
+          ls -lR
+          echo And above
+          ls -l ..
+
