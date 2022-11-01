@@ -14,8 +14,11 @@ jobs:
     steps:
       - name: Check where we are
         run: |
-          set -x
           echo "GITHUB_WORKSPACE is $GITHUB_WORKSPACE"
+          pwd
+          ls -lR
+          echo "Go up"
+          cd ..
           pwd
           ls -lR
 
@@ -23,12 +26,19 @@ jobs:
 
       - name: Check after checkout
         run: |
-          set -x
           echo "GITHUB_WORKSPACE is $GITHUB_WORKSPACE"
           pwd
           ls -lR
-          echo And above
-          ls -l ..
+          echo Go up
+          cd ..
+          pwd
+          ls -l
+
+      - name: Check the checkout
+        run: |
+          pwd
+          git status
+          git branch -a -vv
 
   coyouv1:
     name: Checkout with V1 - you
@@ -37,8 +47,11 @@ jobs:
     steps:
       - name: Check where we are
         run: |
-          set -x
           echo "GITHUB_WORKSPACE is $GITHUB_WORKSPACE"
+          pwd
+          ls -lR
+          echo "Go up"
+          cd ..
           pwd
           ls -lR
 
@@ -50,12 +63,20 @@ jobs:
 
       - name: Check after checkout
         run: |
-          set -x
           echo "GITHUB_WORKSPACE is $GITHUB_WORKSPACE"
           pwd
           ls -lR
-          echo And above
-          ls -l ..
+          echo Go up
+          cd ..
+          pwd
+          ls -l
+
+      - name: Check the checkout
+        working-directory: ../gitblit-docker
+        run: |
+          pwd
+          git status
+          git branch -a -vv
 
   comev3:
     name: Checkout with V3 - me
@@ -64,8 +85,11 @@ jobs:
     steps:
       - name: Check where we are
         run: |
-          set -x
           echo "GITHUB_WORKSPACE is $GITHUB_WORKSPACE"
+          pwd
+          ls -lR
+          echo "Go up"
+          cd ..
           pwd
           ls -lR
 
@@ -73,12 +97,19 @@ jobs:
 
       - name: Check after checkout
         run: |
-          set -x
           echo "GITHUB_WORKSPACE is $GITHUB_WORKSPACE"
           pwd
           ls -lR
-          echo And above
-          ls -l ..
+          echo Go up
+          cd ..
+          pwd
+          ls -l
+
+      - name: Check the checkout
+        run: |
+          pwd
+          git status
+          git branch -a -vv
 
   coyouv3:
     name: Checkout with V3 - you
@@ -87,8 +118,11 @@ jobs:
     steps:
       - name: Check where we are
         run: |
-          set -x
           echo "GITHUB_WORKSPACE is $GITHUB_WORKSPACE"
+          pwd
+          ls -lR
+          echo "Go up"
+          cd ..
           pwd
           ls -lR
 
@@ -100,10 +134,17 @@ jobs:
 
       - name: Check after checkout
         run: |
-          set -x
           echo "GITHUB_WORKSPACE is $GITHUB_WORKSPACE"
           pwd
           ls -lR
-          echo And above
-          ls -l ..
+          echo Go up
+          cd ..
+          pwd
+          ls -l
+
+      - name: Check the checkout
+        run: |
+          pwd
+          git status
+          git branch -a -vv
 
