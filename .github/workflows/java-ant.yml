@@ -7,8 +7,8 @@ on:
       - gh-pages
 
 jobs:
-  comev2:
-    name: Checkout with V2 - me
+  comev1:
+    name: Checkout with V1 - me
     runs-on: ubuntu-latest
     
     steps:
@@ -19,7 +19,7 @@ jobs:
           pwd
           ls -lR
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v1
 
       - name: Check after checkout
         run: |
@@ -30,8 +30,8 @@ jobs:
           echo And above
           ls -l ..
 
-  coyouv2:
-    name: Checkout with V2 - you
+  coyouv1:
+    name: Checkout with V1 - you
     runs-on: ubuntu-latest
     
     steps:
@@ -42,7 +42,7 @@ jobs:
           pwd
           ls -lR
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v1
         with:
           repository: gitblit/gitblit-docker
           ref: master
